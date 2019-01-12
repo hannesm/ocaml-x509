@@ -27,6 +27,7 @@ depends: [
   "asn1-combinators" {>= "0.2.0"}
   "ptime"
   "nocrypto" {>= "0.5.3"}
+  "nocrypto-asymmetric"
   "astring"
   "ounit" {test}
   "cstruct-unix" {test & >= "3.0.0"}

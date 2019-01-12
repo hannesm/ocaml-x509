@@ -25,7 +25,7 @@ let invalid_cas = [
 ]
 
 let cert_public_is_pub cert =
-  let pub = Nocrypto.Rsa.pub_of_priv priv in
+  let pub = Nocrypto_asymmetric.Rsa.pub_of_priv priv in
   ( match public_key cert with
     | `RSA pub' when pub = pub' -> ()
     | _ -> assert_failure "public / private key doesn't match" )

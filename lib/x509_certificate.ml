@@ -1,5 +1,6 @@
 open Sexplib.Conv
 open Nocrypto
+open Nocrypto_asymmetric
 open Astring
 
 open X509_common

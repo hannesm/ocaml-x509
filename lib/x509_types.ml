@@ -85,11 +85,11 @@ let distinguished_name_to_string dn =
   Astring.String.concat ~sep:"/" (List.map component_to_string dn)
 
 type public_key = [
-  | `RSA    of Nocrypto.Rsa.pub
+  | `RSA    of Nocrypto_asymmetric.Rsa.pub
   | `EC_pub of Asn.oid
 ]
 
-type private_key = [ `RSA of Nocrypto.Rsa.priv ]
+type private_key = [ `RSA of Nocrypto_asymmetric.Rsa.priv ]
 
 type key_type = [ `RSA | `EC of Asn.oid ]
 

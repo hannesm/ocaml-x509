@@ -35,8 +35,8 @@ let validity now =
   | None -> invalid_arg "couldn't add 3600 seconds to now"
 
 let key () =
-  let key = Nocrypto.Rsa.generate 1024 in
-  (`RSA (Nocrypto.Rsa.pub_of_priv key), `RSA key)
+  let key = Nocrypto_asymmetric.Rsa.generate 1024 in
+  (`RSA (Nocrypto_asymmetric.Rsa.pub_of_priv key), `RSA key)
 
 let selfsigned ?(name = "test") now =
   let pub, priv = key () in

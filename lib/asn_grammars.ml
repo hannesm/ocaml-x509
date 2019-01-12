@@ -732,7 +732,7 @@ end
 
 module PK = struct
 
-  open Nocrypto
+  open Nocrypto_asymmetric
 
   (* RSA *)
 

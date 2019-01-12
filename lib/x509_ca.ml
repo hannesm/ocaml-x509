@@ -8,7 +8,7 @@ let raw_sign raw digest key =
   let hash = Nocrypto.Hash.digest digest raw in
   let sigval = pkcs1_digest_info_to_cstruct (digest, hash) in
   match key with
-    | `RSA priv -> Nocrypto.Rsa.PKCS1.sig_encode ~key:priv sigval
+    | `RSA priv -> Nocrypto_asymmetric.Rsa.PKCS1.sig_encode ~key:priv sigval
 
 type signing_request = CertificateRequest.certificate_request * Cstruct.t option
 
@@ -38,7 +38,7 @@ let cs_of_signing_request (csr, raw) =
 
 let request subject ?(digest = `SHA256) ?(extensions = []) = function
   | `RSA priv ->
-    let public_key = `RSA (Nocrypto.Rsa.pub_of_priv priv) in
+    let public_key = `RSA (Nocrypto_asymmetric.Rsa.pub_of_priv priv) in
     let info : request_info = { subject ; public_key ; extensions } in
     let info_cs = CertificateRequest.certificate_request_info_to_cs info in
     let signature = raw_sign info_cs digest (`RSA priv) in
@@ -48,7 +48,7 @@ let request subject ?(digest = `SHA256) ?(extensions = []) = function
 let sign signing_request
     ~valid_from ~valid_until
     ?(digest = `SHA256)
-    ?(serial = Nocrypto.(Rng.Z.gen_r Numeric.Z.one Numeric.Z.(one lsl 64)))
+    ?(serial = Nocrypto_asymmetric.(ZRng.Z.gen_r ZNumeric.Z.one ZNumeric.Z.(one lsl 64)))
     ?(extensions = [])
     key issuer =
   assert (validate_signature signing_request) ;

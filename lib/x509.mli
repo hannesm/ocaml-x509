@@ -65,7 +65,7 @@ val supports_keytype : t -> key_type -> bool
 (** The polymorphic variant of public keys, with
     {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
     {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
-type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.oid ]
+type public_key = [ `RSA of Nocrypto_asymmetric.Rsa.pub | `EC_pub of Asn.oid ]
 
 (** [key_id public_key] is [result], the 160-bit [`SHA1] hash of the BIT
     STRING subjectPublicKey (excluding tag, length, and number of
@@ -83,7 +83,7 @@ val key_fingerprint : ?hash:Nocrypto.Hash.hash -> public_key -> Cstruct.t
 (** The polymorphic variant of private keys, with
     {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
     {{!Encoding.Pem.Private_key}encoding and decoding to PEM}. *)
-type private_key = [ `RSA of Nocrypto.Rsa.priv ]
+type private_key = [ `RSA of Nocrypto_asymmetric.Rsa.priv ]
 
 (** [public_key certificate] is [pubkey], the public key of the
     [certificate]. *)
@@ -751,11 +751,11 @@ module Encoding : sig
 
   (** [rsa_public_to_cstruct pk] is [buffer], the ASN.1 encoding of the
       given public key. *)
-  val rsa_public_to_cstruct : Nocrypto.Rsa.pub -> Cstruct.t
+  val rsa_public_to_cstruct : Nocrypto_asymmetric.Rsa.pub -> Cstruct.t
 
   (** [rsa_public_of_cstruct buffer] is [pubkey], the public key of
       the ASN.1 encoded buffer. *)
-  val rsa_public_of_cstruct : Cstruct.t -> Nocrypto.Rsa.pub option
+  val rsa_public_of_cstruct : Cstruct.t -> Nocrypto_asymmetric.Rsa.pub option
 
   (** [crl_to_cstruct crl] is [buffer], the ASN.1 DER encoding of the
       given certificate revocation list. *)
