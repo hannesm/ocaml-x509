@@ -890,3 +890,17 @@ module Authenticator : sig
     hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
 end
+
+module PKCS12 : sig
+
+  type t
+
+  val decode_der : Cstruct.t -> (t, decode_error) result
+
+  val encode_der : t -> Cstruct.t
+
+  val verify : string -> t ->
+    ([ `Certificate of Certificate.t | `Crl of CRL.t
+     | `Private_key of Private_key.t | `Decrypted_private_key of Private_key.t ]
+       list, decode_error) result
+end

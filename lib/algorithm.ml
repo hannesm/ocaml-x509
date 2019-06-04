@@ -48,6 +48,29 @@ type t =
   | SHA512_224
   | SHA512_256
 
+  (* HMAC algorithms *)
+  | HMAC_SHA1
+  | HMAC_SHA224
+  | HMAC_SHA256
+  | HMAC_SHA384
+  | HMAC_SHA512
+
+  (* symmetric block ciphers *)
+  | AES128_CBC of Cstruct.t
+  | AES192_CBC of Cstruct.t
+  | AES256_CBC of Cstruct.t
+
+  (* PBE encryption algorithms *)
+  | SHA_RC4_128 of Cstruct.t * int
+  | SHA_RC4_40 of Cstruct.t * int
+  | SHA_3DES_CBC of Cstruct.t * int
+  | SHA_2DES_CBC of Cstruct.t * int
+  | SHA_RC2_128_CBC of Cstruct.t * int
+  | SHA_RC2_40_CBC of Cstruct.t * int
+
+  | PBKDF2 of Cstruct.t * int * int option * t
+  | PBES2 of t * t
+
 let to_hash = function
   | MD5    -> Some `MD5
   | SHA1   -> Some `SHA1
@@ -64,6 +87,21 @@ and of_hash = function
   | `SHA256 -> SHA256
   | `SHA384 -> SHA384
   | `SHA512 -> SHA512
+
+and to_hmac = function
+  | HMAC_SHA1 -> Some `SHA1
+  | HMAC_SHA224 -> Some `SHA224
+  | HMAC_SHA256 -> Some `SHA256
+  | HMAC_SHA384 -> Some `SHA384
+  | HMAC_SHA512 -> Some `SHA512
+  | _ -> None
+
+and of_hmac = function
+  | `SHA1   -> HMAC_SHA1
+  | `SHA224 -> HMAC_SHA224
+  | `SHA256 -> HMAC_SHA256
+  | `SHA384 -> HMAC_SHA384
+  | `SHA512 -> HMAC_SHA512
 
 and to_key_type = function
   | RSA        -> Some `RSA
@@ -123,7 +161,7 @@ let identifier =
   let f =
     let none x = function
       | None -> x
-      | _    -> parse_error "Algorithm: expected no parameters"
+      | _ -> parse_error "Algorithm: expected no parameters"
     and null x = function
       | Some (`C1 ()) -> x
       | _             -> parse_error "Algorithm: expected null parameters"
@@ -132,7 +170,19 @@ let identifier =
       | _                    -> parse_error "Algorithm: expected null or none parameter"
     and oid f = function
       | Some (`C2 id) -> f id
-      | _             -> parse_error "Algorithm: expected parameter OID"
+      | _ -> parse_error "Algorithm: expected parameter OID"
+    and pbe f = function
+      | Some (`C3 `PBE pbe) -> f pbe
+      | _ -> parse_error "Algorithm: expected parameter PBE"
+    and pbkdf2 f = function
+      | Some (`C3 `PBKDF2 params) -> f params
+      | _ -> parse_error "Algorithm: expected parameter PBKDF2"
+    and pbes2 f = function
+      | Some (`C3 `PBES2 params) -> f params
+      | _ -> parse_error "Algorithm: expected parameter PBES2"
+    and octets f = function
+      | Some (`C4 salt) -> f salt
+      | _ -> parse_error "Algorithm: expected parameter octet_string"
     and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid) in
 
     case_of_oid_f ~default [
@@ -165,12 +215,37 @@ let identifier =
       (sha512                        , null SHA512       ) ;
       (sha224                        , null SHA224       ) ;
       (sha512_224                    , null SHA512_224   ) ;
-      (sha512_256                    , null SHA512_256   ) ]
+      (sha512_256                    , null SHA512_256   ) ;
+
+      (PKCS2.hmac_sha1               , null HMAC_SHA1    );
+      (PKCS2.hmac_sha224             , null HMAC_SHA224  );
+      (PKCS2.hmac_sha256             , null HMAC_SHA256  );
+      (PKCS2.hmac_sha384             , null HMAC_SHA384  );
+      (PKCS2.hmac_sha512             , null HMAC_SHA512  );
+
+      (PKCS5.aes128_cbc              , octets (fun iv -> AES128_CBC iv));
+      (PKCS5.aes192_cbc              , octets (fun iv -> AES192_CBC iv));
+      (PKCS5.aes256_cbc              , octets (fun iv -> AES256_CBC iv));
+
+      (PKCS12.pbe_with_SHA_and_128Bit_RC4, pbe (fun (s, i) -> SHA_RC4_128 (s, i))) ;
+      (PKCS12.pbe_with_SHA_and_40Bit_RC4, pbe (fun (s, i) -> SHA_RC4_40 (s, i))) ;
+      (PKCS12.pbe_with_SHA_and_3_KeyTripleDES_CBC, pbe (fun (s, i) -> SHA_3DES_CBC (s, i))) ;
+      (PKCS12.pbe_with_SHA_and_2_KeyTripleDES_CBC, pbe (fun (s, i) -> SHA_2DES_CBC (s, i))) ;
+      (PKCS12.pbe_with_SHA_and_128Bit_RC2_CBC, pbe (fun (s, i) -> SHA_RC2_128_CBC (s, i))) ;
+      (PKCS12.pbe_with_SHA_and_40Bit_RC2_CBC, pbe (fun (s, i) -> SHA_RC2_40_CBC (s, i))) ;
+
+      (PKCS5.pbkdf2, pbkdf2 (fun (s, i, l, m) -> PBKDF2 (s, i, l, m))) ;
+      (PKCS5.pbes2, pbes2 (fun (oid, oid') -> PBES2 (oid, oid')))
+    ]
 
   and g =
     let none    = None
     and null    = Some (`C1 ())
-    and oid  id = Some (`C2 id) in
+    and oid  id = Some (`C2 id)
+    and pbe (s, i) = Some (`C3 (`PBE (s, i)))
+    and pbkdf2 (s, i, k, m) = Some (`C3 (`PBKDF2 (s, i, k, m)))
+    and pbes2 (oid, oid') = Some (`C3 (`PBES2 (oid, oid')))
+    and octets data = Some (`C4 data) in
     function
     | EC_pub id     -> (ANSI_X9_62.ec_pub_key , oid id)
 
@@ -201,9 +276,51 @@ let identifier =
     | SHA224        -> (sha224                         , null)
     | SHA512_224    -> (sha512_224                     , null)
     | SHA512_256    -> (sha512_256                     , null)
+
+    | HMAC_SHA1     -> (PKCS2.hmac_sha1                , null)
+    | HMAC_SHA224   -> (PKCS2.hmac_sha224              , null)
+    | HMAC_SHA256   -> (PKCS2.hmac_sha256              , null)
+    | HMAC_SHA384   -> (PKCS2.hmac_sha384              , null)
+    | HMAC_SHA512   -> (PKCS2.hmac_sha512              , null)
+
+    | AES128_CBC iv -> (PKCS5.aes128_cbc               , octets iv)
+    | AES192_CBC iv -> (PKCS5.aes192_cbc               , octets iv)
+    | AES256_CBC iv -> (PKCS5.aes256_cbc               , octets iv)
+
+    | SHA_RC4_128 (s, i) -> (PKCS12.pbe_with_SHA_and_128Bit_RC4, pbe (s, i))
+    | SHA_RC4_40 (s, i) -> (PKCS12.pbe_with_SHA_and_40Bit_RC4, pbe (s, i))
+    | SHA_3DES_CBC (s, i) -> (PKCS12.pbe_with_SHA_and_3_KeyTripleDES_CBC, pbe (s, i))
+    | SHA_2DES_CBC (s, i) -> (PKCS12.pbe_with_SHA_and_2_KeyTripleDES_CBC, pbe (s, i))
+    | SHA_RC2_128_CBC (s, i) -> (PKCS12.pbe_with_SHA_and_128Bit_RC2_CBC, pbe (s, i))
+    | SHA_RC2_40_CBC (s, i) -> (PKCS12.pbe_with_SHA_and_40Bit_RC2_CBC, pbe (s, i))
+
+    | PBKDF2 (s, i, k, m) -> (PKCS5.pbkdf2, pbkdf2 (s, i, k, m))
+    | PBES2 (oid, oid') -> (PKCS5.pbes2, pbes2 (oid, oid'))
   in
 
-  map f g @@
-  sequence2
-    (required ~label:"algorithm" oid)
-    (optional ~label:"params" (choice2 null oid))
+  fix (fun id ->
+      let pbkdf2_or_pbe_or_pbes2_params =
+        (* TODO PBKDF2 should support `C2 oid (saltSources) *)
+        let f (salt, count, (* key_len, *) prf) =
+          match salt, count, (* key_len, *) prf with
+          | `C1 salt, Some count, (* None, *) None -> `PBE (salt, count)
+          | `C1 salt, Some count, (* x, *) Some prf -> `PBKDF2 (salt, count, None, prf)
+          | `C2 oid, None, (* None, *) Some oid' -> `PBES2 (oid, oid')
+          | _ -> parse_error "bad parameters"
+        and g = function
+          | `PBE (salt, count) -> (`C1 salt, Some count, (* None, *) None)
+          | `PBKDF2 (salt, count, _key_len, prf) -> (`C1 salt, Some count, (* key_len, *) Some prf)
+          | `PBES2 (oid, oid') -> (`C2 oid, None, (* None, *) Some oid')
+        in
+        map f g @@
+        sequence3
+          (required ~label:"salt" (choice2 octet_string id))
+          (optional ~label:"iteration count" int) (* modified - required for pbkdf2/pbes *)
+          (* (optional ~label:"key length" int) (* should be there and optional *) *)
+          (optional ~label:"prf" id) (* only present in pbkdf2 / pbes2 *)
+      in
+      map f g @@
+      sequence2
+        (required ~label:"algorithm" oid)
+        (optional ~label:"params"
+           (choice4 null oid pbkdf2_or_pbe_or_pbes2_params octet_string)))
