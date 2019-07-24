@@ -5,7 +5,6 @@ let suites =
     "CRL", Crltests.crl_tests ;
   ]
 
-
 let () =
   Printexc.record_backtrace true;
   Nocrypto_entropy_unix.initialize ();

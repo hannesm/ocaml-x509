@@ -52,7 +52,7 @@ let cert ?serial ?(name = "sub") now ca pubca privca issuer =
 let verify () =
   let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
-  let cert, _, _ = cert now false capub capriv (Certificate.subject ca) in
+  let cert, _, _ = cert now false capub capriv (List.hd (Certificate.subject ca)) in
   match Validation.verify_chain ~anchors:[ca] [cert] with
   | Ok _ -> ()
   | Error _ -> Alcotest.fail "expected verification to succeed"
@@ -61,7 +61,7 @@ let crl () =
   let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
-  let issuer = Certificate.subject ca in
+  let issuer = List.hd (Certificate.subject ca) in
   let cert, _, _ = cert ~serial now false capub capriv issuer in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
@@ -76,9 +76,9 @@ let verify' () =
   let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
-  let issuer = Certificate.subject ca in
+  let issuer = List.hd (Certificate.subject ca) in
   let ica, ipub, ipriv = cert ~name:"subCA" ~serial now true capub capriv issuer in
-  let cert, _pub, _priv = cert now false ipub ipriv (Certificate.subject ica) in
+  let cert, _pub, _priv = cert now false ipub ipriv (List.hd (Certificate.subject ica)) in
   match Validation.verify_chain ~anchors:[ca] [cert ; ica] with
   | Ok _ -> ()
   | Error _ -> Alcotest.fail "expected verification!"
@@ -87,9 +87,9 @@ let crl' () =
   let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
-  let issuer = Certificate.subject ca in
+  let issuer = List.hd (Certificate.subject ca) in
   let ica, ipub, ipriv = cert ~name:"subCA" ~serial now true capub capriv issuer in
-  let cert, _pub, _priv = cert now false ipub ipriv (Certificate.subject ica) in
+  let cert, _pub, _priv = cert now false ipub ipriv (List.hd (Certificate.subject ica)) in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
   let crl = CRL.revoke ~issuer ~this_update:now ~extensions [revoked] capriv in
@@ -103,8 +103,8 @@ let crl'leaf () =
   let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
-  let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv (Certificate.subject ca) in
-  let issuer = Certificate.subject ica in
+  let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv (List.hd (Certificate.subject ca)) in
+  let issuer = List.hd (Certificate.subject ica) in
   let cert, _pub, _priv = cert ~serial now false ipub ipriv issuer in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
@@ -119,9 +119,9 @@ let crl'leaf'wrong () =
   let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
-  let issuer = Certificate.subject ca in
+  let issuer = List.hd (Certificate.subject ca) in
   let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv issuer in
-  let cert, _pub, _priv = cert ~serial now false ipub ipriv (Certificate.subject ica) in
+  let cert, _pub, _priv = cert ~serial now false ipub ipriv (List.hd (Certificate.subject ica)) in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
   let crl = CRL.revoke ~issuer ~this_update:now ~extensions [revoked] ipriv in
@@ -134,9 +134,9 @@ let verify'' () =
   let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
-  let issuer = Certificate.subject ca in
+  let issuer = List.hd (Certificate.subject ca) in
   let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv issuer in
-  let cert, _pub, _priv = cert now false ipub ipriv (Certificate.subject ica) in
+  let cert, _pub, _priv = cert now false ipub ipriv (List.hd (Certificate.subject ica)) in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
   let crl = CRL.revoke ~issuer ~this_update:now ~extensions [revoked] capriv in
@@ -149,9 +149,9 @@ let crl'' () =
   let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
-  let issuer = Certificate.subject ca in
+  let issuer = List.hd (Certificate.subject ca) in
   let ica, ipub, ipriv = cert ~name:"subCA" ~serial now true capub capriv issuer in
-  let cert, _pub, _priv = cert now false ipub ipriv (Certificate.subject ica) in
+  let cert, _pub, _priv = cert now false ipub ipriv (List.hd (Certificate.subject ica)) in
   let extensions = Extension.(singleton Reason (false, `Remove_from_CRL)) in
   let revoked = { CRL.serial ; date = now ; extensions } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in

@@ -152,7 +152,7 @@ module Asn = struct
          (implicit 2 ia5_string)
          (implicit 3 or_address)
          (* TODO fixed with newer asn1 (0.2.0 or master (has another commit for this)?? find test case! Everybody uses this as explicit, contrary to x509 (?) *)
-         (explicit 4 Distinguished_name.Asn.name)
+         (explicit 4 Distinguished_name.Asn.rdn_sequence)
          (implicit 5 edi_party_name))
       (choice3
          (implicit 6 ia5_string)

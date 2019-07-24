@@ -10,9 +10,9 @@ type tBSCertificate = {
   version    : [ `V1 | `V2 | `V3 ] ;
   serial     : Z.t ;
   signature  : Algorithm.t ;
-  issuer     : Distinguished_name.t ;
+  issuer     : Distinguished_name.t list ;
   validity   : Ptime.t * Ptime.t ;
-  subject    : Distinguished_name.t ;
+  subject    : Distinguished_name.t list ;
   pk_info    : Public_key.t ;
   issuer_id  : Cstruct.t option ;
   subject_id : Cstruct.t option ;
@@ -88,9 +88,9 @@ module Asn = struct
     (optional ~label:"version"       @@ explicit 0 version) (* default v1 *)
     @ (required ~label:"serialNumber"  @@ certificate_sn)
     @ (required ~label:"signature"     @@ Algorithm.identifier)
-    @ (required ~label:"issuer"        @@ Distinguished_name.Asn.name)
+    @ (required ~label:"issuer"        @@ Distinguished_name.Asn.rdn_sequence)
     @ (required ~label:"validity"      @@ validity)
-    @ (required ~label:"subject"       @@ Distinguished_name.Asn.name)
+    @ (required ~label:"subject"       @@ Distinguished_name.Asn.rdn_sequence)
     @ (required ~label:"subjectPKInfo" @@ Public_key.Asn.pk_info_der)
       (* if present, version is v2 or v3 *)
     @ (optional ~label:"issuerUID"     @@ implicit 1 unique_identifier)
@@ -177,10 +177,10 @@ let pp ppf { asn ; _ } =
   Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %a"
     pp_version tbs.version Z.pp_print tbs.serial
     Fmt.(option ~none:(unit "NONE") pp_sigalg) sigalg
-    Distinguished_name.pp tbs.issuer
+    Distinguished_name.pp_list tbs.issuer
     (Ptime.pp_human ~tz_offset_s:0 ()) (fst tbs.validity)
     (Ptime.pp_human ~tz_offset_s:0 ()) (snd tbs.validity)
-    Distinguished_name.pp tbs.subject
+    Distinguished_name.pp_list tbs.subject
     Extension.pp tbs.extensions
 
 let fingerprint hash cert = Hash.digest hash cert.raw
@@ -215,11 +215,13 @@ let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
    Section 6.4.3. *)
 let hostnames { asn = cert ; _ } =
   let subj =
-    match Distinguished_name.(find CN cert.tbs_cert.subject) with
-    | None -> Domain_name.Set.empty
-    | Some x -> match Domain_name.of_string x with
-      | Ok d -> Domain_name.Set.singleton d
-      | Error _ -> Domain_name.Set.empty
+    List.fold_left (fun acc dn ->
+        match Distinguished_name.(find CN dn) with
+        | None -> acc
+        | Some x -> match Domain_name.of_string x with
+          | Ok d -> Domain_name.Set.singleton d
+          | Error _ -> acc)
+      Domain_name.Set.empty cert.tbs_cert.subject
   in
   match Extension.(find Subject_alt_name cert.tbs_cert.extensions) with
   | None -> subj

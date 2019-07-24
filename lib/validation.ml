@@ -6,7 +6,7 @@ let maybe_validate_hostname cert = function
 
 let issuer_matches_subject
     { Certificate.asn = parent ; _ } { Certificate.asn = cert ; _ } =
-  Distinguished_name.equal parent.tbs_cert.subject cert.tbs_cert.issuer
+  Distinguished_name.equal_list parent.tbs_cert.subject cert.tbs_cert.issuer
 
 let is_self_signed cert = issuer_matches_subject cert cert
 
@@ -140,7 +140,7 @@ let ext_authority_matches_subject trusted cert =
 let rec build_paths fst rst =
   match
     List.filter
-      (fun x -> Distinguished_name.equal (Certificate.issuer fst) (Certificate.subject x))
+      (fun x -> Distinguished_name.equal_list (Certificate.issuer fst) (Certificate.subject x))
       rst
   with
   | [] -> [[fst]]

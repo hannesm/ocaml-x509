@@ -72,18 +72,21 @@ module Asn = struct
                           (Ext.pp_one k) v
               | Some b -> b)
         Ext.empty extensions
+        and subject = match subject with
+          | [ s ] -> s
+          | _ -> parse_error "only a single distinguished name is supported"
         in
         { subject ; public_key ; extensions }
       | _ ->
         parse_error "unknown certificate request info"
     and g { subject ; public_key ; extensions } =
       let extensions = Ext.bindings extensions in
-      (0, subject, public_key, extensions)
+      (0, [ subject ], public_key, extensions)
     in
     map f g @@
     sequence4
       (required ~label:"version" int)
-      (required ~label:"subject" Distinguished_name.Asn.name)
+      (required ~label:"subject" Distinguished_name.Asn.rdn_sequence)
       (required ~label:"subjectPKInfo" Public_key.Asn.pk_info_der)
       (required ~label:"attributes" @@ implicit 0 (set_of attributes))
 
@@ -165,9 +168,9 @@ let sign signing_request
       version = `V3 ;
       serial ;
       signature = signature_algo ;
-      issuer = issuer ;
+      issuer = [ issuer ] ;
       validity = (valid_from, valid_until) ;
-      subject = info.subject ;
+      subject = [ info.subject ] ;
       pk_info = info.public_key ;
       issuer_id = None ;
       subject_id = None ;

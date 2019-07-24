@@ -9,7 +9,7 @@ type revoked_cert = {
 type tBS_CRL = {
   version : [ `V1 | `V2 ] ;
   signature : Algorithm.t ;
-  issuer : Distinguished_name.t ;
+  issuer : Distinguished_name.t list ;
   this_update : Ptime.t ;
   next_update : Ptime.t option ;
   revoked_certs : revoked_cert list ;
@@ -64,7 +64,7 @@ module Asn = struct
     sequence @@
     (optional ~label:"version" @@ version)
     @ (required ~label:"signature" @@ Algorithm.identifier)
-    @ (required ~label:"issuer" @@ Distinguished_name.Asn.name)
+    @ (required ~label:"issuer" @@ Distinguished_name.Asn.rdn_sequence)
     @ (required ~label:"thisUpdate" @@ Certificate.Asn.time)
     @ (optional ~label:"nextUpdate" @@ Certificate.Asn.time)
     @ (optional ~label:"revokedCertificates" @@ sequence_of revokedCertificate)
@@ -123,7 +123,7 @@ let validate { raw ; asn } pub =
   Validation.validate_raw_signature tbs_raw asn.signature_algo asn.signature_val pub
 
 let verify ({ asn ; _ } as crl) ?time cert =
-  Distinguished_name.equal asn.tbs_crl.issuer (Certificate.subject cert) &&
+  Distinguished_name.equal_list asn.tbs_crl.issuer (Certificate.subject cert) &&
   (match time with
    | None -> true
    | Some x -> Ptime.is_later ~than:asn.tbs_crl.this_update x &&
@@ -140,7 +140,7 @@ let reason (revoked : revoked_cert) =
 let is_revoked (crls : t list) ~issuer:super ~cert =
   List.exists (fun crl ->
       if
-        Distinguished_name.equal (Certificate.subject super) (issuer crl) &&
+        Distinguished_name.equal_list (Certificate.subject super) (issuer crl) &&
         validate crl (Certificate.public_key super)
       then
         try
@@ -181,7 +181,7 @@ let revoke
   let tbs_crl = {
     version = `V2 ;
     signature ;
-    issuer ;
+    issuer = [ issuer ] ;
     this_update ; next_update ;
     revoked_certs ;
     extensions

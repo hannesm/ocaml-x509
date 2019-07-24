@@ -132,15 +132,22 @@ module Distinguished_name : sig
   (** [equal a b] is [true] if the distinguished names [a] and [b] are equal. *)
   val equal : t -> t -> bool
 
+  (** [equal_list a b] is [true] if the distinguished name list [a] and [b] are
+      equal. *)
+  val equal_list : t list -> t list -> bool
+
   (** [pp ppf dn] pretty-prints the distinguished name. *)
   val pp : t Fmt.t
 
+  (** [pp_list ppf dn] pretty-prints the distinguished names (rdnSequence). *)
+  val pp_list : t list Fmt.t
+
   (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs]. *)
-  val decode_der : Cstruct.t -> (t, decode_error) result
+  val decode_der : Cstruct.t -> (t list, decode_error) result
 
   (** [encode_der dn] is [cstruct], the ASN.1 encoded representation of the
       distinguished name [dn]. *)
-  val encode_der : t -> Cstruct.t
+  val encode_der : t list -> Cstruct.t
 end
 
 (** A list of [general_name]s is the value of both
@@ -248,7 +255,7 @@ module Extension : sig
   type distribution_point =
     distribution_point_name option *
     reason list option *
-    Distinguished_name.t option
+    General_name.t option
 
   (** The type of an extension: the critical flag and the value itself. *)
   type 'a extension = bool * 'a
@@ -360,11 +367,11 @@ module Certificate : sig
 
   (** [subject certificate] is [dn], the subject as {{!distinguished_name}dn} of
       the [certificate]. *)
-  val subject : t -> Distinguished_name.t
+  val subject : t -> Distinguished_name.t list
 
   (** [issuer certificate] is [dn], the issuer as {{!distinguished_name}dn} of
       the [certificate]. *)
-  val issuer : t -> Distinguished_name.t
+  val issuer : t -> Distinguished_name.t list
 
   (** [serial certificate] is [sn], the serial number of the [certificate]. *)
   val serial : t -> Z.t
@@ -481,7 +488,7 @@ module CRL : sig
   (** {1 Operations on CRLs} *)
 
   (** [issuer c] is the issuer of the revocation list. *)
-  val issuer : t -> Distinguished_name.t
+  val issuer : t -> Distinguished_name.t list
 
   (** [this_update t] is the timestamp of the revocation list. *)
   val this_update : t -> Ptime.t

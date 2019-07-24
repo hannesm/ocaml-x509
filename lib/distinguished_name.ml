@@ -70,8 +70,15 @@ let pp_component : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
 
 let equal a b = equal { f = fun _ a b -> compare a b = 0 } a b
 
+let equal_list a b =
+  List.length a = List.length b && List.for_all2 equal a b
+
 let pp ppf dn =
-  iter (fun (B (k, v)) -> pp_component k ppf v) dn
+  let pp_b ppf (B (k, v)) = pp_component k ppf v in
+  Fmt.(list ~sep:(unit "/") pp_b) ppf (bindings dn)
+
+let pp_list ppf dns =
+  Fmt.(list ~sep:(unit ", ") pp) ppf dns
 
 module Asn = struct
   open Asn.S
@@ -148,30 +155,22 @@ module Asn = struct
         (* This is ANY according to rfc5280. *)
         (required ~label:"attr value" directory_name)
     in
-    let rd_name =
-      let f exts =
-        List.fold_left (fun map (B (k, v)) ->
-            match add_unless_bound k v map with
-            | None -> parse_error "%a already bound" (pp_component k) v
-            | Some b -> b)
-          empty exts
-      and g map = bindings map
-      in
-      map f g @@ set_of attribute_tv
+    let f exts =
+      List.fold_left (fun map (B (k, v)) ->
+          match add_unless_bound k v map with
+          | None -> parse_error "%a already bound" (pp_component k) v
+          | Some b -> b)
+        empty exts
+    and g map = bindings map
     in
-    let rdn_sequence =
-      let f rdns =
-        (* for each component, the last one present in any rdn wins *)
-        List.fold_left (fun m a -> union { f = fun _ _ y -> Some y } m a)
-          empty rdns
-      and g map = [ map ]
-      in
-      map f g @@ sequence_of rd_name
-    in
-    rdn_sequence (* A vacuous choice, in the standard. *)
+    map f g @@ set_of attribute_tv
+
+  let rdn_sequence =
+    (* A vacuous choice, in the standard. *)
+    sequence_of name
 
   let (name_of_cstruct, name_to_cstruct) =
-    projections_of Asn.der name
+    projections_of Asn.der rdn_sequence
 end
 
 let decode_der = Asn.name_of_cstruct
