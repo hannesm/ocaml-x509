@@ -355,7 +355,6 @@ let verify ?(sloppy = false) password (data, ((algorithm, digest), salt, iterati
   let key = pbes hash `Hmac password salt iterations (Mirage_crypto.Hash.digest_size hash) in
   let computed = Mirage_crypto.Hash.mac `SHA1 ~key data in
   if Cstruct.equal computed digest then begin
-    Printf.printf "verified ok\n";
     Asn_grammars.err_to_msg (Asn.auth_safe_of_cs data) >>= fun content ->
     List.fold_left (fun acc c ->
         acc >>= fun acc ->
@@ -365,27 +364,21 @@ let verify ?(sloppy = false) password (data, ((algorithm, digest), salt, iterati
           password_decrypt password data >>| fun data ->
           (data :: acc))
       (Ok []) content >>= fun safe_contents ->
-    let content =
-      List.fold_left (fun acc cs ->
-          match Asn.safe_contents_of_cs cs with
-          | Error `Parse str -> Printf.printf "failed to parse safe_contents %s\n" str; acc
-          | Ok bags ->
-            List.fold_left (fun acc bag ->
-                match bag with
-                | `Certificate c, _ -> `Certificate c :: acc
-                | `Crl c, _ -> `Crl c :: acc
-                | `Private_key p, _ -> `Private_key (`RSA p) :: acc
-                | `Encrypted_private_key (algo, enc_data), _ ->
-                  match decrypt algo password enc_data with
-                  | Error `Msg str -> Printf.printf "decrypt failure for enc key %s" str; acc
-                  | Ok data ->
-                    match Private_key.Asn.private_of_cstruct ~sloppy data with
-                    | Error `Parse str -> Printf.printf "parse failure for enc key %s" str; acc
-                    | Ok p -> `Decrypted_private_key (`RSA p) :: acc)
-              acc bags)
-        [] safe_contents
-    in
-    Ok content
+    List.fold_left (fun acc cs ->
+        acc >>= fun acc ->
+        Asn_grammars.err_to_msg (Asn.safe_contents_of_cs cs) >>= fun bags ->
+        List.fold_left (fun acc bag ->
+            acc >>= fun acc ->
+            match bag with
+            | `Certificate c, _ -> Ok (`Certificate c :: acc)
+            | `Crl c, _ -> Ok (`Crl c :: acc)
+            | `Private_key p, _ -> Ok (`Private_key (`RSA p) :: acc)
+            | `Encrypted_private_key (algo, enc_data), _ ->
+              decrypt algo password enc_data >>= fun data ->
+              Asn_grammars.err_to_msg (Private_key.Asn.private_of_cstruct ~sloppy data) >>= fun p ->
+              Ok (`Decrypted_private_key (`RSA p) :: acc))
+          (Ok acc) bags)
+      (Ok []) safe_contents
   end else begin
     Format.printf "verified false: computed@.%a@.digest@.%a\n"
       Cstruct.hexdump_pp computed Cstruct.hexdump_pp digest;

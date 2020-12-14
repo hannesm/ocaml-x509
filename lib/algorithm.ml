@@ -161,7 +161,7 @@ let identifier =
   let f =
     let none x = function
       | None -> x
-      | _ -> parse_error "Algorithm: expected no parameters"
+      | _    -> parse_error "Algorithm: expected no parameters"
     and null x = function
       | Some (`C1 ()) -> x
       | _             -> parse_error "Algorithm: expected null parameters"
@@ -170,19 +170,19 @@ let identifier =
       | _                    -> parse_error "Algorithm: expected null or none parameter"
     and oid f = function
       | Some (`C2 id) -> f id
-      | _ -> parse_error "Algorithm: expected parameter OID"
+      | _             -> parse_error "Algorithm: expected parameter OID"
     and pbe f = function
       | Some (`C3 `PBE pbe) -> f pbe
-      | _ -> parse_error "Algorithm: expected parameter PBE"
+      | _                   -> parse_error "Algorithm: expected parameter PBE"
     and pbkdf2 f = function
       | Some (`C3 `PBKDF2 params) -> f params
-      | _ -> parse_error "Algorithm: expected parameter PBKDF2"
+      | _                         -> parse_error "Algorithm: expected parameter PBKDF2"
     and pbes2 f = function
       | Some (`C3 `PBES2 params) -> f params
-      | _ -> parse_error "Algorithm: expected parameter PBES2"
+      | _                        -> parse_error "Algorithm: expected parameter PBES2"
     and octets f = function
       | Some (`C4 salt) -> f salt
-      | _ -> parse_error "Algorithm: expected parameter octet_string"
+      | _               -> parse_error "Algorithm: expected parameter octet_string"
     and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid) in
 
     case_of_oid_f ~default [
