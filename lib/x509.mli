@@ -895,12 +895,12 @@ module PKCS12 : sig
 
   type t
 
-  val decode_der : Cstruct.t -> (t, decode_error) result
+  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   val encode_der : t -> Cstruct.t
 
-  val verify : string -> t ->
+  val verify : ?sloppy:bool -> string -> t ->
     ([ `Certificate of Certificate.t | `Crl of CRL.t
      | `Private_key of Private_key.t | `Decrypted_private_key of Private_key.t ]
-       list, decode_error) result
+       list, [> R.msg ]) result
 end

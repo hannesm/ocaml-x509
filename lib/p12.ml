@@ -113,23 +113,23 @@ module Asn = struct
   *)
   (* since asn1 does not yet support ANY defined BY, we develop a rather
      complex grammar covering all supported bags *)
-  let safe_bag =
+  let safe_bag ?(sloppy = false) () =
     let cert_oid, crl_oid =
       Asn.OID.(PKCS9.cert_types <| 1, PKCS9.crl_types <| 1)
     in
     let f (oid, (a, algo, data), attrs) =
       match a, algo, data with
       | `C1 v, Some a, `C1 data when Asn.OID.equal oid PKCS12.key_bag ->
-        let key = Private_key.Asn.reparse_private (v, a, data) in
+        let key = Private_key.Asn.reparse_private ~sloppy (v, a, data) in
         `Private_key key, attrs
       | `C2 id, None, `C2 data ->
         if Asn.OID.equal oid PKCS12.cert_bag && Asn.OID.equal id cert_oid then
           match Certificate.decode_der data with
-          | Error e -> error e
+          | Error (`Msg e) -> error (`Parse e)
           | Ok cert -> `Certificate cert, attrs
         else if Asn.OID.equal oid PKCS12.crl_bag && Asn.OID.equal id crl_oid then
           match Crl.decode_der data with
-          | Error e -> error e
+          | Error (`Msg e) -> error (`Parse e)
           | Ok crl -> `Crl crl, attrs
         else
           parse_error "crl bag with non-standard crl"
@@ -172,10 +172,13 @@ module Asn = struct
                (required ~label:"data" (explicit 0 octet_string)))) *)
       (optional ~label:"bag attributes" (set_of pkcs12_attribute))
 
-  let safe_contents = sequence_of safe_bag
+  let safe_contents ?sloppy () = sequence_of (safe_bag ?sloppy ())
 
-  let safe_contents_of_cs, safe_contents_to_cs =
-    projections_of Asn.der safe_contents
+  let safe_contents_of_cs ?sloppy =
+    fst (projections_of Asn.der (safe_contents ?sloppy ()))
+
+  let safe_contents_to_cs =
+    snd (projections_of Asn.der (safe_contents ()))
 end
 
 let prepare_pw str =
@@ -225,16 +228,16 @@ let fill_or_empty size data =
 let pbes algorithm purpose password salt iterations n =
   let pw = prepare_pw password
   and v = v algorithm
-  and u = Nocrypto.Hash.digest_size algorithm
+  and u = Mirage_crypto.Hash.digest_size algorithm
   in
   let diversifier = id v purpose in
   let salt = fill_or_empty v salt in
   let pass = fill_or_empty v pw in
   let out = Cstruct.create n in
   let rec one off i =
-    let ai = ref (Nocrypto.Hash.digest algorithm (Cstruct.append diversifier i)) in
+    let ai = ref (Mirage_crypto.Hash.digest algorithm (Cstruct.append diversifier i)) in
     for _j = 1 to pred iterations do
-      ai := Nocrypto.Hash.digest algorithm !ai;
+      ai := Mirage_crypto.Hash.digest algorithm !ai;
     done;
     Cstruct.blit !ai 0 out off (min (n - off) u);
     if u >= n - off then () else
@@ -291,7 +294,7 @@ let pkcs12_decrypt algo password data =
    | SHA_2DES_CBC (s, i) -> Ok (s, i, 16, 8) (* TODO 2des -> 3des keys (if relevant)*)
    | SHA_RC2_128_CBC (s, i) -> Ok (s, i, 16, 8)
    | SHA_RC2_40_CBC (s, i) -> Ok (s, i, 5, 8)
-   | _ -> Error (`Parse "unsupported algorithm")) >>= fun (salt, count, key_len, iv_len) ->
+   | _ -> Error (`Msg "unsupported algorithm")) >>= fun (salt, count, key_len, iv_len) ->
   let key = pbes hash `Encryption password salt count key_len
   and iv = pbes hash `Iv password salt count iv_len
   in
@@ -299,15 +302,15 @@ let pkcs12_decrypt algo password data =
    | SHA_RC2_40_CBC _ | SHA_RC2_128_CBC _ ->
      Ok (Rc2.decrypt_cbc ~effective:(key_len * 8) ~key ~iv ~data)
    | SHA_RC4_40 _ | SHA_RC4_128 _ ->
-     let open Nocrypto.Cipher_stream in
+     let open Mirage_crypto.Cipher_stream in
      let key = ARC4.of_secret key in
      let { ARC4.message ; _ } = ARC4.decrypt ~key data in
      Ok message
    | SHA_3DES_CBC _ ->
-     let open Nocrypto.Cipher_block in
+     let open Mirage_crypto.Cipher_block in
      let key = DES.CBC.of_secret key in
      Ok (DES.CBC.decrypt ~key ~iv data)
-   | _ -> Error (`Parse "encryption algorithm not supported")) >>| fun data ->
+   | _ -> Error (`Msg "encryption algorithm not supported")) >>| fun data ->
   unpad data
 
 let pkcs5_2_decrypt kdf enc password data =
@@ -316,18 +319,18 @@ let pkcs5_2_decrypt kdf enc password data =
    | Algorithm.AES128_CBC iv -> Ok (16l, iv)
    | Algorithm.AES192_CBC iv -> Ok (24l, iv)
    | Algorithm.AES256_CBC iv -> Ok (32l, iv)
-   | _ -> Error (`Parse "unsupported encryption algorithm")) >>= fun (dk_len, iv) ->
+   | _ -> Error (`Msg "unsupported encryption algorithm")) >>= fun (dk_len, iv) ->
   (match kdf with
    | Algorithm.PBKDF2 (salt, iterations, _ (* todo handle keylength *), prf) ->
      (match Algorithm.to_hmac prf with
       | Some prf -> Ok prf
-      | None -> Error (`Parse "unsupported PRF")) >>| fun prf ->
+      | None -> Error (`Msg "unsupported PRF")) >>| fun prf ->
      (salt, iterations, prf)
-   | _ -> Error (`Parse "expected kdf being pbkdf2")) >>| fun (salt, count, prf) ->
+   | _ -> Error (`Msg "expected kdf being pbkdf2")) >>| fun (salt, count, prf) ->
   let password = Cstruct.of_string password in
   let key = Pbkdf.pbkdf2 ~prf ~password ~salt ~count ~dk_len in
-  let key = Nocrypto.Cipher_block.AES.CBC.of_secret key in
-  let msg = Nocrypto.Cipher_block.AES.CBC.decrypt ~key ~iv data in
+  let key = Mirage_crypto.Cipher_block.AES.CBC.of_secret key in
+  let msg = Mirage_crypto.Cipher_block.AES.CBC.decrypt ~key ~iv data in
   unpad msg
 
 let decrypt algo password data =
@@ -337,23 +340,23 @@ let decrypt algo password data =
   | SHA_3DES_CBC _ | SHA_2DES_CBC _
   | SHA_RC2_128_CBC _ | SHA_RC2_40_CBC _ -> pkcs12_decrypt algo password data
   | PBES2 (kdf, enc) -> pkcs5_2_decrypt kdf enc password data
-  | _ -> Error (`Parse "unsupported encryption algorithm")
+  | _ -> Error (`Msg "unsupported encryption algorithm")
 
 let password_decrypt password (_typ, algo, data) =
   match data with
-  | None -> Error (`Parse "no data to decrypt")
+  | None -> Error (`Msg "no data to decrypt")
   | Some data -> decrypt algo password data
 
-let verify password (data, ((algorithm, digest), salt, iterations)) =
+let verify ?(sloppy = false) password (data, ((algorithm, digest), salt, iterations)) =
   let open Rresult.R.Infix in
   (match Algorithm.to_hash algorithm with
    | Some hash -> Ok hash
-   | None -> Error (`Parse "unsupported hash algorithm")) >>= fun hash ->
-  let key = pbes hash `Hmac password salt iterations (Nocrypto.Hash.digest_size hash) in
-  let computed = Nocrypto.Hash.mac `SHA1 ~key data in
+   | None -> Error (`Msg "unsupported hash algorithm")) >>= fun hash ->
+  let key = pbes hash `Hmac password salt iterations (Mirage_crypto.Hash.digest_size hash) in
+  let computed = Mirage_crypto.Hash.mac `SHA1 ~key data in
   if Cstruct.equal computed digest then begin
     Printf.printf "verified ok\n";
-    Asn.auth_safe_of_cs data >>= fun content ->
+    Asn_grammars.err_to_msg (Asn.auth_safe_of_cs data) >>= fun content ->
     List.fold_left (fun acc c ->
         acc >>= fun acc ->
         match c with
@@ -374,9 +377,9 @@ let verify password (data, ((algorithm, digest), salt, iterations)) =
                 | `Private_key p, _ -> `Private_key (`RSA p) :: acc
                 | `Encrypted_private_key (algo, enc_data), _ ->
                   match decrypt algo password enc_data with
-                  | Error `Parse str -> Printf.printf "decrypt failure for enc key %s" str; acc
+                  | Error `Msg str -> Printf.printf "decrypt failure for enc key %s" str; acc
                   | Ok data ->
-                    match Private_key.Asn.private_of_cstruct data with
+                    match Private_key.Asn.private_of_cstruct ~sloppy data with
                     | Error `Parse str -> Printf.printf "parse failure for enc key %s" str; acc
                     | Ok p -> `Decrypted_private_key (`RSA p) :: acc)
               acc bags)
@@ -386,9 +389,9 @@ let verify password (data, ((algorithm, digest), salt, iterations)) =
   end else begin
     Format.printf "verified false: computed@.%a@.digest@.%a\n"
       Cstruct.hexdump_pp computed Cstruct.hexdump_pp digest;
-    Error (`Parse "invalid signature")
+    Error (`Msg "invalid signature")
   end
 
-let decode_der = Asn.pfx_of_cs
+let decode_der cs = Asn_grammars.err_to_msg (Asn.pfx_of_cs cs)
 
 let encode_der = Asn.pfx_to_cs

@@ -170,6 +170,6 @@ let decrypt_cbc ?(effective = 128) ~key ~iv ~data =
   for i = 0 to pred ((l + pred block) / block) do
     decrypt_one ~key ~data ~off:(i * block) ~dst
   done;
-  Nocrypto.Uncommon.Cs.xor_into iv dst block;
-  Nocrypto.Uncommon.Cs.xor_into data (Cstruct.shift dst block) (l - block);
+  Mirage_crypto.Uncommon.Cs.xor_into iv dst block;
+  Mirage_crypto.Uncommon.Cs.xor_into data (Cstruct.shift dst block) (l - block);
   dst
