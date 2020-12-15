@@ -892,15 +892,56 @@ module Authenticator : sig
 end
 
 module PKCS12 : sig
+  type attribute = [
+    | `FriendlyName of string
+    | `LocalKeyId of Cstruct.t
+  ]
+
+  type safe_bag
+
+  val safe_bag_pp : safe_bag Fmt.t
+
+  val safe_bag_private_key : ?attrs:attribute list ->
+    Mirage_crypto_pk.Rsa.priv -> safe_bag
+
+  val safe_bag_pkcs8shrouded_key : ?attrs:attribute list ->
+    ?algo:Algorithm.t -> password:string ->
+    Mirage_crypto_pk.Rsa.priv -> (safe_bag, [> R.msg ]) result
+
+  val safe_bag_certificate : ?attrs:attribute list ->
+    Certificate.t -> safe_bag
+
+  val safe_bag_encode_der : safe_bag list -> Cstruct.t
+
+  type content_info
+
+  val content_info_pp : content_info Fmt.t
+
+  val content_info_data : safe_bag list -> content_info
+
+  val content_info_encrypted : ?algo:Algorithm.t -> password:string ->
+    safe_bag list -> (content_info, [> R.msg ]) result
+
+  val content_info_encode_der : content_info list -> Cstruct.t
 
   type t
+
+  val pp : t Fmt.t
 
   val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   val encode_der : t -> Cstruct.t
 
+  (** [verify password t] returns data contained in [t]
+      if MAC and decryption was succefull. *)
   val verify : ?sloppy:bool -> string -> t ->
     ([ `Certificate of Certificate.t | `Crl of CRL.t
      | `Private_key of Private_key.t | `Decrypted_private_key of Private_key.t ]
        list, [> R.msg ]) result
+
+  (** [create ~password:"" content] serializes, signs content
+      and constructs [t] ready for [encode_der t] *)
+  val create : ?hash:Mirage_crypto.Hash.hash ->
+    ?iterations:int -> ?salt:Cstruct.t ->
+    password:string -> content_info list -> t
 end
